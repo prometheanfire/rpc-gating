@@ -2,6 +2,9 @@
 # the location of the nodepool config file source
 nodepool_file_nodepool_yaml_src: "{{ lookup('env', 'WORKSPACE') }}/rpc-gating/nodepool/nodepool-config.yml"
 
+# the location of the nodepool secure config file source
+nodepool_file_secure_conf_src: "{{ lookup('env', 'WORKSPACE') }}/rpc-gating/nodepool/secure.conf"
+
 # where to clone the nodepool git repo to on the target
 nodepool_git_dest: "{{ ansible_user_dir }}/src/git.openstack.org/openstack-infra/nodepool"
 

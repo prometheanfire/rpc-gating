@@ -1,0 +1,7 @@
+---
+instance_list:
+  - name: WEBHOOK-PROXY
+    flavor: general1-1
+    region: IAD
+    metadata:
+      group: "webhook_proxy"

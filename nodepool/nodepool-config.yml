@@ -8,6 +8,9 @@ zookeeper-servers:
   - host: localhost
     port: 2181
 
+zmq-publishers:
+  - "tcp://{{ WEBHOOK_NODE_FQDN }}:{{JENKINS_ZMQ_PORT}}"
+
 labels:
   - name: ubuntu-xenial
     # TODO(odyssey4me):

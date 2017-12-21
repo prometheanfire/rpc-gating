@@ -12,12 +12,20 @@
 #    webhooks from MaaS, extracts relevant info and uses that to create
 #    Jira issues.
 
-- name: Configure Webhook Proxy Node
-  hosts: job_nodes
+- name: Ping nodepool nodes to gather facts
+  hosts: nodepool_server
   user: root
+  tasks:
+    - ping:
+
+- name: Configure Webhook Proxy Node
+  hosts: webhook_proxy
+  user: root
+  vars_files:
+    - vars/re_infra.yml
+
   vars:
     GITHUB_CIDR: "192.30.252.0/22"
-    GITHUB_HOOK_PORT: 80
 
     RPC_GATING_REPO: "https://github.com/rcbops/rpc-gating"
     RPC_GATING_BRANCH: "{{ lookup('env', 'RPC_GATING_BRANCH') }}"
@@ -26,7 +34,6 @@
     WHT_DIR: "{{RPC_GATING_DIR}}/webhooktranslator"
     WHT_VENV_DIR: /opt/venv_webhooktranslator
     WHT_SOCK: /run/webhooktranslator.sock
-    WHT_PORT: 5000
 
     RACKSPACE_WEBHOOK_TOKEN: "{{ lookup('env', 'RACKSPACE_WEBHOOK_TOKEN') }}"
     JIRA_USER: "{{ lookup('env', 'JIRA_USER') }}"
@@ -34,7 +41,23 @@
     JIRA_PROJECT: "{{ lookup('env', 'JIRA_PROJECT') }}"
 
     # phobostunnel_ssh_pubkey Injected by Jenkins Credential
-    PHOBOS_SSH_PORT: 2223
+    # Ports defined in playbooks/vars/re_infra.yml
+
+  handlers:
+    - name: Restart nginx
+      service:
+        name: nginx
+        state: restarted
+        daemon_reload: yes
+      listen: Restart all services
+
+    - name: Restart webhook translator
+      systemd:
+        enabled: yes
+        service: webhooktranslator.service
+        daemon_reload: yes
+        state: restarted
+      listen: Restart all services
 
   pre_tasks:
     # used by webhooks.groovy to create the ssh tunnel script
@@ -45,6 +68,30 @@
         content: "{{ansible_default_ipv4.address}}"
 
     # Setup webhook translator
+    - name: Install prerequisite distro packages
+      apt:
+        name:
+          # requirement for cloning the repos
+          # we install from
+          - git
+          # requirements for pip installs
+          - gcc
+          - libffi-dev
+          - libssl-dev
+          - python-pip
+          - python-virtualenv
+          # requirements for ansible
+          # TODO(odyssey4me):
+          # Remove aptitude when we shift to using
+          # ansible 2.4
+          - aptitude
+          - python-apt
+          - python-minimal
+          # used for creating htpasswd file
+          - apache2-utils
+        update_cache: yes
+      notify:
+        - Restart all services
 
     - name: Install virtualenv tool
       pip:
@@ -56,21 +103,24 @@
         version: "{{ RPC_GATING_BRANCH }}"
         dest: "{{ RPC_GATING_DIR }}"
 
-    - name: Install webhooktranslator
+    - name: Install webhook translator
       pip:
         virtualenv: "{{ WHT_VENV_DIR }}"
         name: "{{ WHT_DIR }}"
         state: forcereinstall
+      notify: Restart webhook translator
 
     - name: Template webhooktranslator service definition
       template:
         src: webhooktranslator_service.j2
         dest: /lib/systemd/system/webhooktranslator.service
+      notify: Restart webhook translator
 
     - name: Template webhooktranslator socket definition
       template:
         src: webhooktranslator_socket.j2
         dest: /lib/systemd/system/webhooktranslator.socket
+      notify: Restart webhook translator
 
     # Nginx forwards FCGI requests to a unix socket (WHT_SOCK)
     # Systemd creates this socket and starts webhooktranslator.service
@@ -102,13 +152,7 @@
         port: "{{ GITHUB_HOOK_PORT }}"
         src: "{{GITHUB_CIDR }}"
 
-    # Configure Nginx. (apache2-utils only used to create htpasswd file)
-
-    - name: Install apt packages
-      apt:
-        pkg: "apache2-utils"
-        state: installed
-        update_cache: yes
+    # Configure Nginx.
 
     - name: Create htpasswd file
       shell: |
@@ -134,6 +178,18 @@
         rule: allow
         port: "{{ PHOBOS_SSH_PORT }}"
 
+    # The webhook proxy node also provides access to Jenkins for the nodepool
+    # servers. Nodepool requires access to ZMQ and the Jenkins API
+    - name: Allow nodepool servers access to ZMQ and Jenkins API
+      ufw:
+        rule: allow
+        port: "{{ item[1] }}"
+        from: "{{ hostvars[item[0]].ansible_default_ipv4.address }}"
+      with_nested:
+        - "{{ groups['nodepool_server'] }}"
+        - - "{{ JENKINS_ZMQ_PORT }}"
+          - "{{ NODEPOOL_JENKINS_API_PORT }}"
+
   roles:
     - role: geerlingguy.nginx
       nginx_remove_default_vhost: true
@@ -149,6 +205,16 @@
               proxy_pass https://localhost:8888;
               # Don't pass auth header on to jenkins.
               proxy_set_header Authorization "";
+            }
+          # This port is protected by UFW, connections only allowed
+          # From nodepool servers.
+        - listen: "{{ NODEPOOL_JENKINS_API_PORT }}"
+          server_name: "nodepooljenkinsproxy"
+          root: "/dev/null"
+          extra_parameters: |
+            location /np {
+              proxy_bind 127.0.0.1;
+              proxy_pass https://localhost:8888;
             }
         - listen: "{{ WHT_PORT }}"
           server_name: "webhooktranslator"

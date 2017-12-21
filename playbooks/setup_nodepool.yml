@@ -29,6 +29,7 @@
   serial: 1
   vars_files:
     - vars/nodepool.yml
+    - vars/re_infra.yml
   handlers:
     - name: Restart zookeeper
       service:
@@ -230,4 +231,3 @@
     - name: Setup log rotation
       include_role:
         name: openstack.logrotate
-
