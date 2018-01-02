@@ -94,25 +94,27 @@
       - github
     dsl: |
       library "rpc-gating@${{RPC_GATING_BRANCH}}"
-      common.shared_slave(){{
-        stage('OnMetal Multi-Node AIO') {{
-          git branch: "{branch}", url: "https://github.com/rcbops/rpc-openstack"
-          if("{series}" == "mitaka"){{
-            build job: 'OnMetal-Multi-Node-AIO_mitaka-trusty-deploy-none-post-merge'
-          }} else {{
-            build job: 'OnMetal-Multi-Node-AIO_{series}-xenial-deploy-none-post-merge'
-          }}
-        }} // stage
-        stage('Push to rpc-openstack'){{
-         sshagent (credentials:['rpc-jenkins-svc-github-ssh-key']){{
-           sh """
-             mkdir -p ~/.ssh
-             ssh-keyscan github.com >> ~/.ssh/known_hosts
-             git push -f git@github.com:rcbops/rpc-openstack HEAD:omna-approved-{series}
-             """
-         }} // sshagent
-        }} // stage
-      }} // node
+      common.globalWraps(){{
+        common.shared_slave(){{
+          stage('OnMetal Multi-Node AIO') {{
+            git branch: "{branch}", url: "https://github.com/rcbops/rpc-openstack"
+            if("{series}" == "mitaka"){{
+              build job: 'OnMetal-Multi-Node-AIO_mitaka-trusty-deploy-none-post-merge'
+            }} else {{
+              build job: 'OnMetal-Multi-Node-AIO_{series}-xenial-deploy-none-post-merge'
+            }}
+          }} // stage
+          stage('Push to rpc-openstack'){{
+           sshagent (credentials:['rpc-jenkins-svc-github-ssh-key']){{
+             sh """
+               mkdir -p ~/.ssh
+               ssh-keyscan github.com >> ~/.ssh/known_hosts
+               git push -f git@github.com:rcbops/rpc-openstack HEAD:omna-approved-{series}
+               """
+           }} // sshagent
+          }} // stage
+        }} // node
+      }} // globalWraps
 
 - job-template:
     name: 'OnMetal-Multi-Node-AIO_{series}-{image}-{action}-{resources}-{trigger}'

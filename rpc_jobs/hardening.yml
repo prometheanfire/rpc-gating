@@ -69,62 +69,64 @@
 
     dsl: |
       library "rpc-gating@${{RPC_GATING_BRANCH}}"
-      common.shared_slave(){{
-        try {{
-          common.internal_slave(){{
-            withCredentials([
-              string(
-                credentialsId: 'hardening_repo_url',
-                variable: 'HARDENING_REPO'
-              )
-            ]){{
-              dir("RPC-Unified-Gating") {{
-                git branch: "master", url: env.HARDENING_REPO, credentialsId: 'rpc-jenkins-svc-github-key'
-              }} // dir
-            }} // withCred
-            stash includes: 'RPC-Unified-Gating/', name: 'RPC-Unified-Gating'
-          }} // CentOS node
+      common.globalWraps(){{
+        common.shared_slave(){{
+          try {{
+            common.internal_slave(){{
+              withCredentials([
+                string(
+                  credentialsId: 'hardening_repo_url',
+                  variable: 'HARDENING_REPO'
+                )
+              ]){{
+                dir("RPC-Unified-Gating") {{
+                  git branch: "master", url: env.HARDENING_REPO, credentialsId: 'rpc-jenkins-svc-github-key'
+                }} // dir
+              }} // withCred
+              stash includes: 'RPC-Unified-Gating/', name: 'RPC-Unified-Gating'
+            }} // CentOS node
 
-          instance_name = common.gen_instance_name()
-          deploy_node = null
-          pubcloud.getPubCloudSlave(instance_name: instance_name)
+            instance_name = common.gen_instance_name()
+            deploy_node = null
+            pubcloud.getPubCloudSlave(instance_name: instance_name)
 
-          common.use_node(instance_name){{
-            multi_node_aio_prepare.prepare()
-            instance_ip = sh(script: "ip route get 1 | awk '{{print \$NF;exit}}'", returnStdout: true)
-          }} // public cloud node
+            common.use_node(instance_name){{
+              multi_node_aio_prepare.prepare()
+              instance_ip = sh(script: "ip route get 1 | awk '{{print \$NF;exit}}'", returnStdout: true)
+            }} // public cloud node
 
-          deploy_node = "${{instance_name}}-infra1-vm"
-          multi_node_aio_prepare.connect_deploy_node(deploy_node, instance_ip)
+            deploy_node = "${{instance_name}}-infra1-vm"
+            multi_node_aio_prepare.connect_deploy_node(deploy_node, instance_ip)
 
-          common.use_node(deploy_node){{
-            deploy.deploy_sh(
-              environment_vars: [
-                "DEPLOY_HAPROXY=yes",
-                "DEPLOY_ELK=yes",
-                "DEPLOY_TEMPEST=no",
-                "DEPLOY_AIO=no",
-                "DEPLOY_MAAS=no"
-                ]
-            ) // deploy_sh
-            // Do quick tempest test to ensure environment is operational
-            tempest.tempest()
-            stage("Run hardening scripts"){{
-              unstash 'RPC-Unified-Gating'
-              dir("RPC-Unified-Gating"){{
-                sh """#!/bin/bash
-                bash ./run_tests.sh
-                """
-              }} // dir
-            }} // stage
-          }} // deploy node on public cloud node
-        }} catch (e){{
-            currentBuild.result = 'FAILURE'
-            throw e
-        }} finally {{
-            pubcloud.delPubCloudSlave(instance_name: instance_name)
-            if(deploy_node != null){{
-              ssh_slave.destroy(deploy_node)
-            }}
-        }}
-      }} // cit node
+            common.use_node(deploy_node){{
+              deploy.deploy_sh(
+                environment_vars: [
+                  "DEPLOY_HAPROXY=yes",
+                  "DEPLOY_ELK=yes",
+                  "DEPLOY_TEMPEST=no",
+                  "DEPLOY_AIO=no",
+                  "DEPLOY_MAAS=no"
+                  ]
+              ) // deploy_sh
+              // Do quick tempest test to ensure environment is operational
+              tempest.tempest()
+              stage("Run hardening scripts"){{
+                unstash 'RPC-Unified-Gating'
+                dir("RPC-Unified-Gating"){{
+                  sh """#!/bin/bash
+                  bash ./run_tests.sh
+                  """
+                }} // dir
+              }} // stage
+            }} // deploy node on public cloud node
+          }} catch (e){{
+              currentBuild.result = 'FAILURE'
+              throw e
+          }} finally {{
+              pubcloud.delPubCloudSlave(instance_name: instance_name)
+              if(deploy_node != null){{
+                ssh_slave.destroy(deploy_node)
+              }}
+          }}
+        }} // cit node
+      }} // globalWraps
