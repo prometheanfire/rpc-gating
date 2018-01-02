@@ -723,10 +723,6 @@ void use_node(String label=null, body){
                          env.RPC_GATING_BRANCH)
       install_ansible()
       print "${env.NODE_NAME} preparation complete, now ready for use."
-      // Ensure log size is not excessive
-      wrap([$class: 'LogfilesizecheckerWrapper', 'maxLogSize': 200, 'failBuild': false, 'setOwn': true]) {
-        body()
-      }
     } catch (e){
       print "Caught exception on ${env.NODE_NAME}: ${e}"
       throw e
@@ -904,7 +900,7 @@ void setTriggerVars(){
 // max log size is in MB
 void globalWraps(Closure body){
   // global timeout is long, so individual jobs can set shorter timeouts and
-  // and still have to cleanup, archive atefacts etc.
+  // and still have to cleanup, archive artifacts etc.
   timeout(time: 10, unit: 'HOURS'){
     wrap([$class: 'LogfilesizecheckerWrapper', 'maxLogSize': 200, 'failBuild': true, 'setOwn': true]) {
       timestamps{

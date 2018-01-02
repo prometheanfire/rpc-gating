@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
-# Script used to review jenkins jobs and report job names
-# not following conventions
-# https://github.com/rcbops/rpc-gating#naming-conventions
+# Script used to review jenkins jobs for compliance with internal conventions:
+#   * Naming convetions:
+#        https://github.com/rcbops/rpc-gating#naming-conventions
+#   * Retention Policy
 
 import argparse
 import os
@@ -10,9 +11,11 @@ import re
 import sys
 import yaml
 
+import jmespath
+
 
 def parse_args():
-    description = "Parses given directories for rpc-gating naming conventions"
+    description = "Check JJB for RPC convention compliance"
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--exclude-files",
                         required=False,
@@ -58,10 +61,14 @@ def parse_jjb_file(in_dir, in_file):
             # check job-template name
             if parse_job_name(item["job-template"]["name"], filename):
                 _rc = 1
+            if check_retention(item['job-template'], filename):
+                _rc = 1
 
         if "job" in item:
             # check individual job
             if parse_job_name(item["job"]["name"], filename):
+                _rc = 1
+            if check_retention(item['job'], filename):
                 _rc = 1
     return _rc
 
@@ -86,6 +93,67 @@ def parse_file_name(in_dir, in_file):
         out += "conform to rpc-gating conventions\n"
         sys.stderr.write(out)
         return 1
+    return 0
+
+
+# Ensure all jobs have a retention policy
+# Structure:
+#   job:
+#     properties:
+#      - build-discarder:
+#          days-to-keep: 3
+
+def check_retention_value(job, value_name, vmin, vmax):
+    value = jmespath.search(
+        'properties[*]."build-discarder"."{vn}"'.format(vn=value_name), job)[0]
+
+    # try and convert to int, if that fails, check for templated value.
+    try:
+        days = int(value)
+    except ValueError as e:
+        # Can't check templated values, assume they are ok.
+        if '{' in value and '}' in value:
+            return
+        else:
+            raise e
+
+    if days <= vmin or days > vmax:
+        raise ValueError("Value for {vn} out of range. "
+                         "Value: {v}, min: {min}, max: {max}"
+                         .format(vn=value_name, v=value,
+                                 min=vmin, max=vmax))
+
+
+def check_retention(job, in_file):
+    error_message = ("{f}/{j}: Valid build-discarder config not found."
+                     " Please ensure days-to-keep (0 < x <= 365) or"
+                     " num-to-keep (0 < x <= 100) is specified."
+                     " Properties: {p}\n"
+                     .format(j=job['name'], f=in_file,
+                             p=job.get('properties')))
+
+    error_counter = 0
+
+    try:
+        check_retention_value(job, 'days-to-keep', 0, 365)
+    except (TypeError, IndexError):
+        error_counter += 1
+    except ValueError as e:
+        print e
+        error_counter += 1
+
+    try:
+        check_retention_value(job, 'num-to-keep', 0, 100)
+    except (TypeError, IndexError):
+        error_counter += 1
+    except ValueError as e:
+        print e
+        error_counter += 1
+
+    if (error_counter > 1):
+        sys.stderr.write(error_message)
+        return 1
+
     return 0
 
 

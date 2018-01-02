@@ -24,6 +24,8 @@
       - build-discarder:
           days-to-keep: 3
     dsl: |
+      library "rpc-gating@${RPC_GATING_BRANCH}"
+
       @NonCPS
       def getLongRunningNodes() {
         return jenkins.model.Jenkins.instance.nodes.grep {
@@ -38,7 +40,8 @@
         }
       }
 
-      library "rpc-gating@${RPC_GATING_BRANCH}"
+      // end of functions
+
       common.globalWraps(){
         // Get list of jenkins slaves
         // run node cleanups on all nodes
