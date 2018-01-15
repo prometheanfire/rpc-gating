@@ -18,3 +18,22 @@
       - "deploy_newton-rc"
     jobs:
       - 'PM_{repo_name}-{branch}-{image}-{scenario}-{action}'
+
+- project:
+    name: "hardening-repo-rpc-openstack-aio-postmerge"
+    repo_name: "RPC-Unified-Gating"
+    repo_url: "internal:hardening_repo_url"
+    branch: "master"
+    jira_project_key: "RO"
+    image:
+      - xenial_aio_loose_artifacts:
+          IMAGE: "Ubuntu 16.04 LTS (Xenial Xerus) (PVHVM)"
+          FLAVOR: "7"
+    scenario:
+      - "swift"
+    action:
+      - "deploy_master"
+      - "deploy_newton"
+      - "deploy_newton-rc"
+    jobs:
+      - 'PM_{repo_name}-{branch}-{image}-{scenario}-{action}'
