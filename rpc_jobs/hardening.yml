@@ -1,6 +1,6 @@
 - project:
     name: "hardening-repo-rpc-openstack-mnaio-postmerge"
-    repo_name: "RPC-Unified-Gating"
+    repo_name: "hardening"
     repo_url: "internal:hardening_repo_url_git_harry"
     branch: "master"
     jira_project_key: "SAN"
@@ -21,7 +21,7 @@
 
 - project:
     name: "hardening-repo-rpc-openstack-aio-postmerge"
-    repo_name: "RPC-Unified-Gating"
+    repo_name: "hardening"
     repo_url: "internal:hardening_repo_url_git_harry"
     branch: "master"
     jira_project_key: "SAN"
